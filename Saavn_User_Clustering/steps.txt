@@ -1,0 +1,15 @@
+1. Downloaded the dataset in local using aws-cli. Below commands were run-
+
+a) aws s3 sync s3://bigdataanalyticsupgrad/newmetadata C:\Users\tanvi\Desktop\course6Assignment\SaavnAnalyticsProject\metadata
+
+b) aws s3 sync s3://bigdataanalyticsupgrad/notification_clicks C:\Users\tanvi\Desktop\course6Assignment\SaavnAnalyticsProject\notificationClicks
+
+c) aws s3 sync s3://bigdataanalyticsupgrad/notification_actor C:\Users\tanvi\Desktop\course6Assignment\SaavnAnalyticsProject\notificationArtists
+
+
+spark2-submit --class Test.Clustering.App --master yarn --deploy-mode client --name test /home/ec2-user/Clustering-0.0.1-SNAPSHOT.jar
+
+spark2-submit --class Test.Clustering.App --master yarn --deploy-mode client --name test /home/ec2-user/Clustering-0.0.1-SNAPSHOT-jar-with-dependencies.jar
+
+
+
