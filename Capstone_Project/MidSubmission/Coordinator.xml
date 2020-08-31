@@ -1,0 +1,28 @@
+<coordinator-app name="credit_card_coord" start="${start}" end="${end}"
+frequency="${coord:hours(4)}" timezone="UTC" xmlns="uri:oozie:coordinator:0.4">
+	<controls>
+		<timeout>${mine_timeout}</timeout>
+		<concurrency>${mine_concurrency}</concurrency>
+		<execution>${mine_execution}</execution>
+		<throttle>${mine_throttle}</throttle>
+	</controls>
+	<action>
+		<workflow>
+			<app-path>${workflowpath}</app-path>
+			<configuration>
+				<property>
+					<name>jobTracker</name>
+					<value>${jobTracker}</value>
+				</property>
+				<property>
+					<name>nameNode</name>
+					<value>${nameNode}</value>
+				</property>
+				<property>
+					<name>queueName</name>
+					<value>${queueName}</value>
+				</property>
+			</configuration>
+		</workflow>
+	</action>
+</coordinator-app>

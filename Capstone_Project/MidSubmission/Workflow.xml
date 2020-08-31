@@ -1,0 +1,58 @@
+<workflow-app name="credit_card_transactions" xmlns="uri:oozie:workflow:0.5">
+   <start to = "inc_update_card_member" />
+   <action name = "inc_update_card_member">
+      <sqoop xmlns="uri:oozie:sqoop-action:0.2">
+			<job-tracker>${jobTracker}</job-tracker>
+            <name-node>${nameNode}</name-node>
+			<job-xml>sqoop-site.xml</job-xml>
+			<configuration>
+				<property>
+					<name>fs.hdfs.impl.disable.cache</name>
+					<value>true</value>
+				</property>
+			   <property>
+				   <name>mapred.job.queue.name</name>
+				   <value>default</value>
+			   </property>
+			</configuration>
+		 <command>job --exec inc_update_card_member_hive_new --meta-connect jdbc:hsqldb:hsql://ip-172-31-85-40.ec2.internal:16000/sqoop</command>
+      </sqoop>		
+      <ok to = "inc_update_member_score_hdfs"/>
+      <error to = "fail" />
+   </action>
+   <action name = "inc_update_member_score_hdfs">
+      <sqoop xmlns="uri:oozie:sqoop-action:0.2">
+			<job-tracker>${jobTracker}</job-tracker>
+            <name-node>${nameNode}</name-node>
+			<job-xml>sqoop-site.xml</job-xml>
+			<configuration>
+				<property>
+					<name>fs.hdfs.impl.disable.cache</name>
+					<value>true</value>
+				</property>
+			   <property>
+				   <name>mapred.job.queue.name</name>
+				   <value>default</value>
+			   </property>
+			</configuration>
+			<!-- <script>hdfs_path_of_script/orc.hive</script>-->
+			<command>sqoop job --exec inc_update_member_score_hdfs --meta-connect jdbc:hsqldb:hsql://ip-172-31-85-40.ec2.internal:16000/sqoop</command>
+      </sqoop>		
+      <ok to="load_hive_tables"/>
+      <error to="fail"/>
+    </action>
+     <action name="load_hive_tables">
+       <hive xmlns="uri:oozie:hive-action:0.2">
+            <job-tracker>${jobTracker}</job-tracker>
+            <name-node>${nameNode}</name-node>
+			<job-xml>hive-site.xml</job-xml>
+            <script>${hivescript}</script>
+        </hive>
+        <ok to="finish"/>
+        <error to="fail"/>
+    </action>
+	<kill name="fail">
+        <message>Hive failed, error message[${wf:errorMessage(wf:lastErrorNode())}]</message>
+    </kill>
+    <end name="finish"/>
+</workflow-app>

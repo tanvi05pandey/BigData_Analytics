@@ -1,0 +1,43 @@
+--1. I uploaded the data dump of card_transactions.csv file to my S3 bucket. 
+--So I used S3 location 's3a://tanvi-upgrad-project/tables/' to upload data into my hive 
+--table card_transactions_hive_new
+create external table if not exists
+card_transactions_hive_new
+(
+card_id string
+,member_id string
+,amount int
+,postcode string
+,pos_id string
+,transaction_dt string
+,status string
+)
+ROW FORMAT DELIMITED FIELDS
+TERMINATED BY ',' STORED AS TEXTFILE
+location 's3a://tanvi-upgrad-project/tables/'
+tblproperties("skip.header.line.count"="1");
+--2. In Hue, I ran the following commands to link hbase table amazon_hbase_card_transactions_new and hive table:
+Add jar /opt/cloudera/parcels/CDH/lib/hive-hcatalog/share/hcatalog/hive-hcatalog-core-1.1.0-cdh5.15.1.jar
+create table amazon_hbase_card_transactions_new(card_id string,member_id string, amount int, postcode string, pos_id string, transaction_dt string, status string)
+STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITH SERDEPROPERTIES ("hbase.columns.mapping" = ":key,memberID:member_id,amount:amount,postcode:postcode,posID:pos_id,transactionDT:transaction_dt,status:status")
+TBLPROPERTIES ("hbase.table.name" = "card_transactions_hive_new");
+--3. Load Hbase table:
+insert overwrite table amazon_hbase_card_transactions_new 
+select reflect("java.util.UUID", "randomUUID"), * from card_transactions_hive_new;
+--4. Create look-up table in Hbase shell:
+create 'lookup_table_hbase_new', 'card_id_and_ucl', 'location_and_date', 'score'
+--5. Create look up table in hive
+create external table tmp_hive_lookup_table(
+    card_id string,
+    UCL bigint,
+    postcode string,
+    transaction_dt string,
+    score int
+);
+--Create Hbase table on top of hive table in Hue:
+create table hbase_look_up_table(card_id string,ucl bigint, 
+postcode string, transaction_dt string, score int)
+STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITH SERDEPROPERTIES ("hbase.columns.mapping" = ":key,card_id_and_ucl:ucl,location_and_date:postcode,location_and_date:transaction_dt,score:score")
+TBLPROPERTIES ("hbase.table.name" = "tmp_hive_lookup_table")

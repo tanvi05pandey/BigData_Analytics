@@ -1,0 +1,12 @@
+--1. Ingest card_member data into hive table:
+sqoop job --create inc_update_card_member_hive_new --meta-connect jdbc:hsqldb:hsql://ip-172-31-85-40.ec2.internal:16000/sqoop -- import --connect jdbc:mysql://upgradawsrds.cpclxrkdvwmz.us-east-1.rds.amazonaws.com/cred_financials_data --username upgraduser --password upgraduser --table card_member --incremental append --check-column member_joining_dt --last-value 0 --hive-import --hive-table card_member_hive_new --fields-terminated-by ,
+sqoop job --exec inc_update_card_member_hive_new --meta-connect jdbc:hsqldb:hsql://ip-172-31-85-40.ec2.internal:16000/sqoop
+--2. Ingest member_score data into HDFS location:
+sqoop job --create inc_update_member_score_hdfs --meta-connect jdbc:hsqldb:hsql://ip-172-31-85-40.ec2.internal:16000/sqoop -- import --connect jdbc:mysql://upgradawsrds.cpclxrkdvwmz.us-east-1.rds.amazonaws.com/cred_financials_data --username upgraduser --password upgraduser --table member_score --delete-target-dir --target-dir /project/member_score/data
+sqoop job --exec inc_update_member_score_hdfs --meta-connect jdbc:hsqldb:hsql://ip-172-31-85-40.ec2.internal:16000/sqoop
+--After the above ingestion, I then created an oozie coordinator hive action to ultimately ingest 
+--data from this HDFS location to my hive table member_score_hive_1. I saved my SQL in a file 
+--called queries.sql and ran this script through my coordinator job. The script used to ingest data 
+--into table is:
+--load data inpath '/project/member_score/data/part-m*' overwrite into table 
+--member_score_hive_1;

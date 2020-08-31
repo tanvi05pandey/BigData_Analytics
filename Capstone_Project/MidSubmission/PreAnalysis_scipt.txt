@@ -1,0 +1,120 @@
+--To ultimately calculate UCL for each card id, I segregated the calculation into multiple tables and saved these --queries in a file called queries.sql
+--insert member score data into hive table
+load data inpath '/project/member_score/data/part-m*' overwrite into table member_score_hive_1;
+
+--load the tmp table to store card no and its last txn date:
+
+insert overwrite table tmp_latest_txn_dt
+select a.card_id, a.transaction_dt from
+(SELECT card_id, transaction_dt,
+          row_number() over (partition by card_id order by 
+          from_unixtime(unix_timestamp(transaction_dt ,'dd-MM-yyyy HH:mm:ss'), 'yyyy-MM-dd')
+          desc)r
+   FROM amazon_hbase_card_transactions_new where status ='GENUINE'
+   )a
+   where r=1
+   group by a.card_id, a.transaction_dt, a.r;
+   
+--create a tmp table to store card no and its latest post code:
+
+insert overwrite table tmp_latest_postcode
+select a.card_id, a.postcode from
+(SELECT card_id, transaction_dt, postcode,
+          row_number() over (partition by card_id order by 
+          from_unixtime(unix_timestamp(transaction_dt ,'dd-MM-yyyy HH:mm:ss'), 'yyyy-MM-dd')
+          desc)r
+   FROM amazon_hbase_card_transactions_new where status ='GENUINE'
+   )a
+   where r=1
+   group by a.card_id, a.transaction_dt, a.postcode, a.r;
+   
+--create a tmp table to store simple moving avg for each card no
+
+insert overwrite table tmp_sma_new
+select a.card_id, a.amount from
+(SELECT b.card_id, avg(b.amount) as amount
+FROM
+(
+   SELECT card_id, amount, transaction_dt,
+          row_number() over (partition by card_id order by 
+          from_unixtime(unix_timestamp(transaction_dt ,'dd-MM-yyyy HH:mm:ss'), 'yyyy-MM-dd')
+          desc) r
+   FROM amazon_hbase_card_transactions_new where status ='GENUINE'
+   
+) b
+WHERE r <= 10
+GROUP BY b.card_id
+)a;
+
+--create a tmp table to store std deviation
+
+insert overwrite table tmp_std_deviation_new
+SELECT b.card_id, stddev_pop(b.amount) as deviation
+FROM
+(
+   SELECT card_id, amount, transaction_dt,
+          row_number() over (partition by card_id order by 
+          from_unixtime(unix_timestamp(transaction_dt ,'dd-MM-yyyy HH:mm:ss'), 'yyyy-MM-dd')
+          desc) r
+   FROM amazon_hbase_card_transactions_new where status ='GENUINE'
+   
+) b
+WHERE r <= 10
+GROUP BY b.card_id;
+
+--Create temp table for UCL calculation and insert data into it:
+insert overwrite table tmp_ucl
+select sma.card_id,
+       (sma.amount + 3*sd.amount) as ucl
+        from
+        (
+            select card_id, amount
+            from tmp_sma_new
+        )sma
+        left join
+        (
+            select card_id, amount
+            from tmp_std_deviation_new
+        )sd
+        on sma.card_id = sd.card_id;
+		
+--Load data into final lookup table
+insert overwrite table tmp_hive_lookup_table
+select ucl.card_id,
+        ucl.ucl,
+        postcode.latest_post_code,
+        txn_dt.latest_transaction_dt,
+        member_score.score
+    from(
+        select card_id,
+                ucl
+        from tmp_ucl
+    )ucl
+    left join
+    (   
+        select card_id,
+                latest_post_code
+        from tmp_latest_postcode
+    )postcode on ucl.card_id = postcode.card_id
+    left join
+    (
+        select card_id,
+                latest_transaction_dt
+        from tmp_latest_txn_dt
+    )txn_dt on ucl.card_id = txn_dt.card_id
+    left join
+    (
+        select card_id,
+               member_id
+        from card_member_hive_new
+    )card_member on ucl.card_id = card_member.card_id
+    left join
+    (
+        select member_id,
+                score
+        from member_score_hive_1
+    )member_score on card_member.member_id = member_score.member_id;
+	
+	--insert data into hbase lookup table
+	insert overwrite table hbase_look_up_table
+	select * from tmp_hive_lookup_table;
